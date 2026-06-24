@@ -55,8 +55,8 @@ export default function WalkPage() {
   const st = STATUS[safety.status]
   const StatusIcon = st.icon
 
-  // Sun arc: map elevation (0-68) to a point along a top semicircle.
-  const t = Math.min(1, safety.sunElevation / 68)
+  // Sun arc: map real elevation (0-90°) to a point along a top semicircle.
+  const t = safety.sunElevation / 90
   const sunX = 30 + (240 * (1 - Math.cos(t * Math.PI))) / 2
   const sunY = 110 - Math.sin(t * Math.PI) * 80
 
