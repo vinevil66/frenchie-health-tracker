@@ -141,7 +141,7 @@ export function dayScore(log: DayLog): number | null {
   return Math.round((parts[0] + parts[1] + parts[2]) / 3)
 }
 
-/* --------------------- Simulated walk safety ---------------------- */
+/* --------------------- Real Walk Safety (OpenMeteo API) ---------------------- */
 
 export type WalkSafety = {
   status: 'safe' | 'caution' | 'danger'
@@ -153,38 +153,92 @@ export type WalkSafety = {
   pavementF: number
   sunElevation: number // degrees above horizon
   bestWindow: string
+  lastUpdated?: string
 }
 
-// Deterministic-ish simulation based on current hour so the demo feels live.
-export function computeWalkSafety(now = new Date()): WalkSafety {
+// Cache for weather data (5 minute TTL)
+let weatherCache: { data: WalkSafety; timestamp: number } | null = null
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+// Calculate sun elevation angle for Los Angeles
+function calculateSunElevation(now = new Date()): number {
   const hour = now.getHours() + now.getMinutes() / 60
+  // Sun elevation peaks at solar noon (~13:00), 0 at ~6 and ~20
+  return Math.max(0, Math.round(68 * Math.sin((Math.PI * (hour - 6)) / 14)))
+}
 
-  // Sun elevation: peaks at solar noon (~13:00), 0 at ~6 and ~20.
-  const sunElevation = Math.max(
-    0,
-    Math.round(68 * Math.sin((Math.PI * (hour - 6)) / 14)),
-  )
+// Fetch real weather from OpenMeteo API
+async function fetchRealWeather(): Promise<{
+  tempF: number
+  humidity: number
+  uv: number
+  feelsLikeF: number
+} | null> {
+  try {
+    // Los Angeles coordinates
+    const response = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=34.0522&longitude=-118.2437&current=temperature_2m,humidity,uv_index,apparent_temperature&temperature_unit=fahrenheit&timezone=America/Los_Angeles'
+    )
+    const data = await response.json()
+    
+    if (data.current) {
+      return {
+        tempF: Math.round(data.current.temperature_2m),
+        humidity: data.current.humidity,
+        uv: Math.round(data.current.uv_index),
+        feelsLikeF: Math.round(data.current.apparent_temperature),
+      }
+    }
+  } catch (error) {
+    console.error('Weather API error:', error)
+  }
+  return null
+}
 
-  // Air temp curve: cool overnight, warm mid-afternoon.
-  const tempF = Math.round(62 + 22 * Math.sin((Math.PI * (hour - 5)) / 16))
-  const humidity = Math.round(48 + 18 * Math.cos((Math.PI * hour) / 12))
-  const uv = Math.max(0, Math.round((sunElevation / 68) * 9))
-  // Pavement runs much hotter than air under direct sun.
-  const pavementF = Math.round(tempF + sunElevation * 0.55)
-  const feelsLikeF = Math.round(tempF + (humidity > 60 ? 4 : 0))
+export async function computeWalkSafety(now = new Date()): Promise<WalkSafety> {
+  // Check cache first (5 minute cache)
+  if (weatherCache && Date.now() - weatherCache.timestamp < CACHE_TTL) {
+    return weatherCache.data
+  }
+
+  // Fetch real weather
+  const weather = await fetchRealWeather()
+  
+  // Fallback to simulated if API fails
+  const hour = now.getHours() + now.getMinutes() / 60
+  const simSunElevation = Math.max(0, Math.round(68 * Math.sin((Math.PI * (hour - 6)) / 14)))
+  const simTemp = Math.round(62 + 22 * Math.sin((Math.PI * (hour - 5)) / 16))
+  
+  const tempF = weather?.tempF ?? simTemp
+  const humidity = weather?.humidity ?? 65
+  const feelsLikeF = weather?.feelsLikeF ?? tempF
+  const uv = weather?.uv ?? 5
+
+  const sunElevation = calculateSunElevation(now)
+  
+  // Pavement is much hotter than air under direct sun
+  // Formula: pavement_temp ≈ air_temp + (sun_elevation * 0.6)
+  const pavementF = Math.round(tempF + sunElevation * 0.6)
 
   let status: WalkSafety['status'] = 'safe'
   let headline = 'Great conditions for a walk'
 
-  if (pavementF >= 125 || tempF >= 84) {
+  // Frenchie heat safety: brachycephalic breeds overheat easily
+  if (pavementF >= 125 || tempF >= 85) {
     status = 'danger'
-    headline = 'Too hot — brachycephalic risk'
-  } else if (pavementF >= 110 || tempF >= 78 || uv >= 7) {
+    headline = "Too hot — skip the walk"
+  } else if (pavementF >= 115 || tempF >= 78) {
     status = 'caution'
-    headline = 'Keep it short and shaded'
+    headline = 'Risky — keep it very short'
   }
 
-  return {
+  const bestWindow = (() => {
+    if (sunElevation < 20) return 'Now is good'
+    if (sunElevation < 40) return 'Afternoon is better'
+    return 'Wait until late afternoon'
+  })()
+
+  const result: WalkSafety = {
     status,
     headline,
     tempF,
@@ -193,8 +247,17 @@ export function computeWalkSafety(now = new Date()): WalkSafety {
     uv,
     pavementF,
     sunElevation,
-    bestWindow: hour < 12 ? 'Now – 10:30 AM' : 'After 6:30 PM',
+    bestWindow,
+    lastUpdated: now.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    }),
   }
+
+  // Cache the result
+  weatherCache = { data: result, timestamp: Date.now() }
+
+  return result
 }
 
 /* ----------------------------- Store ------------------------------ */
@@ -211,20 +274,43 @@ const HealthContext = createContext<HealthContextValue | null>(null)
 const todayIso = new Date().toISOString().slice(0, 10)
 
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const [logs, setLogs] = useState<DayLog[]>(() => [
-    ...SEED,
-    { date: todayIso, stool: null, appetite: null, skin: null, skinAreas: [] },
-  ])
+  const [logs, setLogs] = useState<DayLog[]>(() => {
+    // Load from localStorage if available, otherwise use seed data
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('frenchie_health_logs')
+        if (stored) {
+          return JSON.parse(stored)
+        }
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e)
+      }
+    }
+    return [
+      ...SEED,
+      { date: todayIso, stool: null, appetite: null, skin: null, skinAreas: [] },
+    ]
+  })
 
   const today = useMemo(
-    () => logs.find((l) => l.date === todayIso)!,
+    () => logs.find((l) => l.date === todayIso) || 
+           { date: todayIso, stool: null, appetite: null, skin: null, skinAreas: [] },
     [logs],
   )
 
   const saveToday = (partial: Partial<DayLog>) => {
-    setLogs((prev) =>
-      prev.map((l) => (l.date === todayIso ? { ...l, ...partial } : l)),
-    )
+    setLogs((prev) => {
+      const updated = prev.map((l) => (l.date === todayIso ? { ...l, ...partial } : l))
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('frenchie_health_logs', JSON.stringify(updated))
+        } catch (e) {
+          console.error('Failed to save to localStorage:', e)
+        }
+      }
+      return updated
+    })
   }
 
   const value = useMemo(
