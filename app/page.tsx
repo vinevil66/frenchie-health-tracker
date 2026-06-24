@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
@@ -18,6 +19,7 @@ import {
   appetitePoints,
   skinPoints,
   computeWalkSafety,
+  type WalkSafety,
   STOOL_OPTIONS,
   APPETITE_OPTIONS,
   SKIN_OPTIONS,
@@ -34,9 +36,17 @@ const SAFETY_STYLES = {
 export default function TodayPage() {
   const { dog, today } = useHealth()
   const score = dayScore(today)
-  const safety = computeWalkSafety()
-  const s = SAFETY_STYLES[safety.status]
-  const SafetyIcon = s.icon
+  const [safety, setSafety] = useState<WalkSafety | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    computeWalkSafety().then((result) => {
+      if (!cancelled) setSafety(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -113,31 +123,38 @@ export default function TodayPage() {
       </section>
 
       {/* Walk safety preview */}
-      <Link
-        href="/walk"
-        className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
-      >
-        <span
-          className={`flex size-12 items-center justify-center rounded-full bg-secondary ${s.text}`}
+      {safety && (
+        <Link
+          href="/walk"
+          className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
         >
-          <SafetyIcon className="size-6" strokeWidth={1.75} />
-        </span>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`size-2 rounded-full ${s.dot}`} />
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Walk safety
+          <span
+            className={`flex size-12 items-center justify-center rounded-full bg-secondary ${SAFETY_STYLES[safety.status].text}`}
+          >
+            {(() => {
+              const SafetyIcon = SAFETY_STYLES[safety.status].icon
+              return <SafetyIcon className="size-6" strokeWidth={1.75} />
+            })()}
+          </span>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`size-2 rounded-full ${SAFETY_STYLES[safety.status].dot}`}
+              />
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Walk safety
+              </p>
+            </div>
+            <p className="mt-0.5 text-sm font-semibold text-foreground">
+              {safety.headline}
+            </p>
+            <p className="tabular text-xs text-muted-foreground">
+              {safety.tempF}°F air · {safety.pavementF}°F pavement
             </p>
           </div>
-          <p className="mt-0.5 text-sm font-semibold text-foreground">
-            {safety.headline}
-          </p>
-          <p className="tabular text-xs text-muted-foreground">
-            {safety.tempF}°F air · {safety.pavementF}°F pavement
-          </p>
-        </div>
-        <ChevronRight className="size-5 text-muted-foreground" />
-      </Link>
+          <ChevronRight className="size-5 text-muted-foreground" />
+        </Link>
+      )}
 
       {/* Metrics */}
       <section className="flex flex-col gap-3">

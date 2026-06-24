@@ -1,11 +1,13 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { Eye, Sun, CloudSun, Thermometer } from 'lucide-react'
 import {
   useHealth,
   dayScore,
   computeWalkSafety,
+  type WalkSafety,
   STOOL_OPTIONS,
   APPETITE_OPTIONS,
   SKIN_OPTIONS,
@@ -21,9 +23,17 @@ const SAFETY = {
 export default function PartnerPage() {
   const { dog, today } = useHealth()
   const score = dayScore(today)
-  const safety = computeWalkSafety()
-  const s = SAFETY[safety.status]
-  const SafetyIcon = s.icon
+  const [safety, setSafety] = useState<WalkSafety | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    computeWalkSafety().then((result) => {
+      if (!cancelled) setSafety(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const rows = [
     {
@@ -105,27 +115,34 @@ export default function PartnerPage() {
         ))}
       </section>
 
-      <section className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4">
-        <span
-          className={`flex size-12 items-center justify-center rounded-full bg-secondary ${s.text}`}
-        >
-          <SafetyIcon className="size-6" strokeWidth={1.75} />
-        </span>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`size-2 rounded-full ${s.dot}`} />
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Walk safety
+      {safety && (
+        <section className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4">
+          <span
+            className={`flex size-12 items-center justify-center rounded-full bg-secondary ${SAFETY[safety.status].text}`}
+          >
+            {(() => {
+              const SafetyIcon = SAFETY[safety.status].icon
+              return <SafetyIcon className="size-6" strokeWidth={1.75} />
+            })()}
+          </span>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`size-2 rounded-full ${SAFETY[safety.status].dot}`}
+              />
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Walk safety
+              </p>
+            </div>
+            <p className="mt-0.5 text-sm font-semibold text-foreground">
+              {SAFETY[safety.status].label}
+            </p>
+            <p className="tabular text-xs text-muted-foreground">
+              {safety.tempF}°F air · {safety.pavementF}°F pavement
             </p>
           </div>
-          <p className="mt-0.5 text-sm font-semibold text-foreground">
-            {s.label}
-          </p>
-          <p className="tabular text-xs text-muted-foreground">
-            {safety.tempF}°F air · {safety.pavementF}°F pavement
-          </p>
-        </div>
-      </section>
+        </section>
+      )}
 
       {today.note && (
         <section className="rounded-2xl border border-border bg-card p-5">
