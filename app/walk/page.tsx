@@ -70,6 +70,7 @@ export default function WalkPage() {
       : 1 - safety.sunElevation / 90
   const sunX = 30 + (240 * (1 - Math.cos(t * Math.PI))) / 2
   const sunY = 110 - Math.sin(t * Math.PI) * 80
+  const outOfWindow = hour < 7 || hour >= 19
 
   const advice =
     safety.status === 'safe'
@@ -110,44 +111,58 @@ export default function WalkPage() {
             {safety.sunElevation}° elevation
           </span>
         </div>
-        <svg viewBox="0 0 300 130" className="w-full" aria-hidden="true">
-          <line
-            x1="10"
-            y1="110"
-            x2="290"
-            y2="110"
-            stroke="currentColor"
-            className="text-border"
-            strokeWidth="1"
-          />
-          <path
-            d="M30 110 A 120 120 0 0 1 270 110"
-            fill="none"
-            stroke="currentColor"
-            className="text-secondary"
-            strokeWidth="2"
-            strokeDasharray="4 6"
-          />
-          {safety.sunElevation > 0 && (
-            <>
-              <circle
-                cx={sunX}
-                cy={sunY}
-                r="9"
-                className={st.ring}
-                fill="currentColor"
-              />
-              <circle
-                cx={sunX}
-                cy={sunY}
-                r="15"
-                className={st.ring}
-                fill="currentColor"
-                opacity="0.18"
-              />
-            </>
+        <div className="relative">
+          <svg
+            viewBox="0 0 300 130"
+            className="w-full"
+            style={outOfWindow ? { opacity: 0.2 } : undefined}
+            aria-hidden="true"
+          >
+            <line
+              x1="10"
+              y1="110"
+              x2="290"
+              y2="110"
+              stroke="currentColor"
+              className="text-border"
+              strokeWidth="1"
+            />
+            <path
+              d="M30 110 A 120 120 0 0 1 270 110"
+              fill="none"
+              stroke="currentColor"
+              className="text-secondary"
+              strokeWidth="2"
+              strokeDasharray="4 6"
+            />
+            {safety.sunElevation > 0 && (
+              <>
+                <circle
+                  cx={sunX}
+                  cy={sunY}
+                  r="9"
+                  className={st.ring}
+                  fill="currentColor"
+                />
+                <circle
+                  cx={sunX}
+                  cy={sunY}
+                  r="15"
+                  className={st.ring}
+                  fill="currentColor"
+                  opacity="0.18"
+                />
+              </>
+            )}
+          </svg>
+          {outOfWindow && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <p className="text-sm font-semibold text-foreground">
+                {safety.bestWindow}
+              </p>
+            </div>
           )}
-        </svg>
+        </div>
         <div className="flex justify-between text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
           <span>7 AM</span>
           <span>Noon</span>
