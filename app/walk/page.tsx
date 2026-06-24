@@ -149,9 +149,9 @@ export default function WalkPage() {
           )}
         </svg>
         <div className="flex justify-between text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-          <span>6 AM</span>
+          <span>7 AM</span>
           <span>Noon</span>
-          <span>8 PM</span>
+          <span>7 PM</span>
         </div>
       </section>
 
