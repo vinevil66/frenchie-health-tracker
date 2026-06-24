@@ -61,7 +61,13 @@ export default function WalkPage() {
   const StatusIcon = st.icon
 
   // Sun arc: map real elevation (0-90°) to a point along a top semicircle.
-  const t = safety.sunElevation / 90
+  // Direction depends on AM/PM since the same elevation occurs once rising
+  // and once setting, and there's no other signal to tell them apart.
+  const hour = new Date().getHours()
+  const t =
+    hour < 12
+      ? safety.sunElevation / 90
+      : 1 - safety.sunElevation / 90
   const sunX = 30 + (240 * (1 - Math.cos(t * Math.PI))) / 2
   const sunY = 110 - Math.sin(t * Math.PI) * 80
 
@@ -122,21 +128,25 @@ export default function WalkPage() {
             strokeWidth="2"
             strokeDasharray="4 6"
           />
-          <circle
-            cx={sunX}
-            cy={sunY}
-            r="9"
-            className={st.ring}
-            fill="currentColor"
-          />
-          <circle
-            cx={sunX}
-            cy={sunY}
-            r="15"
-            className={st.ring}
-            fill="currentColor"
-            opacity="0.18"
-          />
+          {safety.sunElevation > 0 && (
+            <>
+              <circle
+                cx={sunX}
+                cy={sunY}
+                r="9"
+                className={st.ring}
+                fill="currentColor"
+              />
+              <circle
+                cx={sunX}
+                cy={sunY}
+                r="15"
+                className={st.ring}
+                fill="currentColor"
+                opacity="0.18"
+              />
+            </>
+          )}
         </svg>
         <div className="flex justify-between text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
           <span>6 AM</span>
