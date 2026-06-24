@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -274,44 +275,49 @@ const HealthContext = createContext<HealthContextValue | null>(null)
 
 const todayIso = new Date().toISOString().slice(0, 10)
 
+const LOGS_STORAGE_KEY = 'frenchie_logs'
+
+function loadStoredLogs(): DayLog[] | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = localStorage.getItem(LOGS_STORAGE_KEY)
+    return stored ? JSON.parse(stored) : null
+  } catch (e) {
+    console.error('Failed to load from localStorage:', e)
+    return null
+  }
+}
+
 export function HealthProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<DayLog[]>(() => {
-    // Load from localStorage if available, otherwise use seed data
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('frenchie_health_logs')
-        if (stored) {
-          return JSON.parse(stored)
-        }
-      } catch (e) {
-        console.error('Failed to load from localStorage:', e)
-      }
-    }
-    return [
-      ...SEED,
-      { date: todayIso, stool: null, appetite: null, skin: null, skinAreas: [] },
-    ]
+    const stored = loadStoredLogs()
+    return (
+      stored ?? [
+        ...SEED,
+        { date: todayIso, stool: null, appetite: null, skin: null, skinAreas: [] },
+      ]
+    )
   })
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(logs))
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e)
+    }
+  }, [logs])
+
   const today = useMemo(
-    () => logs.find((l) => l.date === todayIso) || 
+    () => logs.find((l) => l.date === todayIso) ||
            { date: todayIso, stool: null, appetite: null, skin: null, skinAreas: [] },
     [logs],
   )
 
   const saveToday = (partial: Partial<DayLog>) => {
-    setLogs((prev) => {
-      const updated = prev.map((l) => (l.date === todayIso ? { ...l, ...partial } : l))
-      // Persist to localStorage
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('frenchie_health_logs', JSON.stringify(updated))
-        } catch (e) {
-          console.error('Failed to save to localStorage:', e)
-        }
-      }
-      return updated
-    })
+    setLogs((prev) =>
+      prev.map((l) => (l.date === todayIso ? { ...l, ...partial } : l)),
+    )
   }
 
   const value = useMemo(
