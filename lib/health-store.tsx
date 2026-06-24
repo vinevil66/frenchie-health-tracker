@@ -160,11 +160,10 @@ export type WalkSafety = {
 let weatherCache: { data: WalkSafety; timestamp: number } | null = null
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-// Calculate sun elevation angle for Los Angeles
-function calculateSunElevation(now = new Date()): number {
-  const hour = now.getHours() + now.getMinutes() / 60
-  // Sun elevation peaks at solar noon (~13:00), 0 at ~6 and ~20
-  return Math.max(0, Math.round(68 * Math.sin((Math.PI * (hour - 6)) / 14)))
+// Map direct solar radiation (W/m²) to an approximate sun elevation angle
+function radiationToSunElevation(radiation: number): number {
+  const ratio = Math.max(0, Math.min(1, radiation / 1000))
+  return Math.max(0, Math.min(90, Math.round(Math.asin(ratio) * (180 / Math.PI))))
 }
 
 // Fetch real weather from OpenMeteo API
@@ -173,20 +172,22 @@ async function fetchRealWeather(): Promise<{
   humidity: number
   uv: number
   feelsLikeF: number
+  sunElevation: number
 } | null> {
   try {
     // Los Angeles coordinates
     const response = await fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=34.0522&longitude=-118.2437&current=temperature_2m,humidity,uv_index,apparent_temperature&temperature_unit=fahrenheit&timezone=America/Los_Angeles'
+      'https://api.open-meteo.com/v1/forecast?latitude=34.0522&longitude=-118.2437&current=temperature_2m,relative_humidity_2m,apparent_temperature,uv_index,direct_radiation&temperature_unit=fahrenheit&timezone=America/Los_Angeles'
     )
     const data = await response.json()
-    
+
     if (data.current) {
       return {
         tempF: Math.round(data.current.temperature_2m),
-        humidity: data.current.humidity,
+        humidity: data.current.relative_humidity_2m,
         uv: Math.round(data.current.uv_index),
         feelsLikeF: Math.round(data.current.apparent_temperature),
+        sunElevation: radiationToSunElevation(data.current.direct_radiation),
       }
     }
   } catch (error) {
@@ -214,7 +215,7 @@ export async function computeWalkSafety(now = new Date()): Promise<WalkSafety> {
   const feelsLikeF = weather?.feelsLikeF ?? tempF
   const uv = weather?.uv ?? 5
 
-  const sunElevation = calculateSunElevation(now)
+  const sunElevation = weather?.sunElevation ?? simSunElevation
   
   // Pavement is much hotter than air under direct sun
   // Formula: pavement_temp ≈ air_temp + (sun_elevation * 0.6)
