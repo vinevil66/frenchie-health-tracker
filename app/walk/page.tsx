@@ -1,7 +1,8 @@
 'use client'
 
-import { Sun, CloudSun, Thermometer, Droplets, Footprints, Clock } from 'lucide-react'
-import { computeWalkSafety } from '@/lib/health-store'
+import { useEffect, useState } from 'react'
+import { Sun, CloudSun, Thermometer, Droplets, Footprints, Clock, Loader } from 'lucide-react'
+import { computeWalkSafety, type WalkSafety } from '@/lib/health-store'
 
 const STATUS = {
   safe: {
@@ -25,7 +26,32 @@ const STATUS = {
 } as const
 
 export default function WalkPage() {
-  const safety = computeWalkSafety()
+  const [safety, setSafety] = useState<WalkSafety | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadWeather = async () => {
+      setLoading(true)
+      const data = await computeWalkSafety()
+      setSafety(data)
+      setLoading(false)
+    }
+
+    loadWeather()
+
+    // Refresh every 5 minutes
+    const interval = setInterval(loadWeather, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  if (loading || !safety) {
+    return (
+      <div className="flex flex-col gap-7 px-5 pt-8 items-center justify-center min-h-screen">
+        <Loader className="size-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Loading weather data...</p>
+      </div>
+    )
+  }
   const st = STATUS[safety.status]
   const StatusIcon = st.icon
 
@@ -135,10 +161,15 @@ export default function WalkPage() {
         </div>
       </section>
 
-      <p className="px-2 text-center text-[11px] leading-relaxed text-muted-foreground/70">
-        Conditions are simulated for this prototype. Connect a live weather &amp;
-        geolocation source to enable real-time alerts.
-      </p>
+      {/* Last updated */}
+      <div className="flex items-center justify-between px-2 py-4 rounded-lg bg-secondary/30">
+        <p className="text-xs text-muted-foreground">
+          Data from OpenMeteo • Los Angeles, CA
+        </p>
+        <p className="text-xs font-medium text-primary">
+          Updated {safety.lastUpdated}
+        </p>
+      </div>
     </div>
   )
 }
