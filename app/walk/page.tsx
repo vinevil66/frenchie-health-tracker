@@ -26,32 +26,38 @@ const STATUS = {
 } as const
 
 export default function WalkPage() {
+  // Starts null on both server and client renders, so the skeleton below is
+  // the only markup produced until the effect resolves on the client —
+  // avoids a hydration mismatch from rendering live weather data server-side.
   const [safety, setSafety] = useState<WalkSafety | null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+
     const loadWeather = async () => {
-      setLoading(true)
       const data = await computeWalkSafety()
-      setSafety(data)
-      setLoading(false)
+      if (!cancelled) setSafety(data)
     }
 
     loadWeather()
 
     // Refresh every 5 minutes
     const interval = setInterval(loadWeather, 5 * 60 * 1000)
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [])
 
-  if (loading || !safety) {
+  if (!safety) {
     return (
-      <div className="flex flex-col gap-7 px-5 pt-8 items-center justify-center min-h-screen">
-        <Loader className="size-8 animate-spin text-primary" />
-        <p className="text-muted-foreground">Loading weather data...</p>
+      <div className="flex flex-col items-center justify-center gap-3 px-5 py-24">
+        <Loader className="size-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Checking conditions…</p>
       </div>
     )
   }
+
   const st = STATUS[safety.status]
   const StatusIcon = st.icon
 
