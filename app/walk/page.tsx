@@ -71,6 +71,10 @@ export default function WalkPage() {
   const sunX = 30 + (240 * (1 - Math.cos(t * Math.PI))) / 2
   const sunY = 110 - Math.sin(t * Math.PI) * 80
   const outOfWindow = hour < 7 || hour >= 19
+  const message =
+    hour < 7
+      ? 'Early and cool — best time of day'
+      : 'Heat has passed — best time of day'
 
   const advice =
     safety.status === 'safe'
@@ -157,8 +161,8 @@ export default function WalkPage() {
           </svg>
           {outOfWindow && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-sm font-semibold text-foreground">
-                {safety.bestWindow}
+              <p className="max-w-xs mx-auto text-center font-serif text-xl sm:text-2xl text-foreground">
+                {message}
               </p>
             </div>
           )}
