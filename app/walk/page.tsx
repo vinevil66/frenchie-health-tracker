@@ -51,13 +51,12 @@ export default function WalkPage() {
 
   if (!safety) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 px-5 py-24">
-        <Loader className="size-8 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Checking conditions…</p>
+      <div className="flex flex-col gap-7 px-5 pt-8 items-center justify-center min-h-screen">
+        <Loader className="size-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Loading weather data...</p>
       </div>
     )
   }
-
   const st = STATUS[safety.status]
   const StatusIcon = st.icon
 
