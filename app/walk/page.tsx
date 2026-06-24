@@ -30,6 +30,7 @@ export default function WalkPage() {
   // the only markup produced until the effect resolves on the client —
   // avoids a hydration mismatch from rendering live weather data server-side.
   const [safety, setSafety] = useState<WalkSafety | null>(null)
+  const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
     let cancelled = false
@@ -42,10 +43,13 @@ export default function WalkPage() {
     loadWeather()
 
     // Refresh every 5 minutes
-    const interval = setInterval(loadWeather, 5 * 60 * 1000)
+    const weatherInterval = setInterval(loadWeather, 5 * 60 * 1000)
+    // Tick every 60s so outOfWindow flips at exactly 7am/7pm
+    const clockInterval = setInterval(() => setNow(new Date()), 60_000)
     return () => {
       cancelled = true
-      clearInterval(interval)
+      clearInterval(weatherInterval)
+      clearInterval(clockInterval)
     }
   }, [])
 
@@ -63,7 +67,7 @@ export default function WalkPage() {
   // Sun arc: map real elevation (0-90°) to a point along a top semicircle.
   // Direction depends on AM/PM since the same elevation occurs once rising
   // and once setting, and there's no other signal to tell them apart.
-  const hour = new Date().getHours()
+  const hour = now.getHours()
   const t =
     hour < 12
       ? safety.sunElevation / 90
